@@ -1,6 +1,10 @@
 
+using FacefusionBE.DB;
+using FacefusionBE.Filters;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.IO;
 using System.Net.Http;
@@ -13,11 +17,19 @@ namespace FacefusionBE.Controllers
     [ApiController]
     public class FaceSwapController : ControllerBase
     {
-        private readonly string pythonApiUrl = "http://localhost:5000/swap"; // Python API endpoint
+        private readonly string pythonApiUrl = $"http://{Environment.GetEnvironmentVariable("DB_IP")}:5000/swap"; // Python API endpoint
+        private readonly FacefusionDBContext _context;
+        public FaceSwapController(FacefusionDBContext context)
+        {
+            _context = context;
+        }
 
         [HttpPost("swap-face")]
+        [AuthorizationFilter]
         public async Task<IActionResult> SwapFace([FromForm] IFormFile sourceImage, [FromForm] IFormFile targetVideo)
         {
+            var email = (string)HttpContext.Items["email"];
+            
             if (sourceImage == null || targetVideo == null)
             {
                 return BadRequest("Both source image and target video are required.");
@@ -37,7 +49,19 @@ namespace FacefusionBE.Controllers
 
                 // Analyze the video duration (pass MemoryStream to your method)
                 double duration = await GetVideoDurationAsync(targetVideoStream);
-                Console.WriteLine($"Video Duration: {duration} seconds");
+                var user = await _context.Users.FirstOrDefaultAsync(e => e.Email == email);
+                if(user != null)
+                {
+                    if(user.Credit < duration)
+                    {
+                        return BadRequest("Insufficient credits!");
+                    }
+                }
+                else
+                {
+                    return BadRequest("No such user");
+                }
+                    Console.WriteLine($"Video Duration: {duration} seconds");
 
                 // Reset the position again before sending to Python
                 targetVideoStream.Position = 0;
@@ -56,6 +80,9 @@ namespace FacefusionBE.Controllers
                 if (response.IsSuccessStatusCode)
                 {
                     var responseData = await response.Content.ReadAsByteArrayAsync();
+                    user.Credit -= (int)Math.Round(duration);
+                    _context.Update(user);
+                    await _context.SaveChangesAsync();
                     return File(responseData, "video/mp4", "output.mp4");
                 }
                 else

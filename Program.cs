@@ -1,6 +1,8 @@
 
+using FacefusionBE.DB;
+using FacefusionBE.Services;
 using Microsoft.AspNetCore.HttpOverrides;
-
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using System.Net;
 
@@ -51,17 +53,16 @@ builder.Services.AddCors(options =>
 
 });
 
-//builder.Services.AddTransient<DataService>();
-//builder.Services.AddTransient<CommentService>();
-//builder.Services.AddTransient<AccessLogService>();
-//builder.Services.AddTransient<MailService>();
+builder.Services.AddTransient<AuthService>();
+builder.Services.AddTransient<PasswordHashService>();
+builder.Services.AddTransient<MailService>();
 
 var saPassword = Environment.GetEnvironmentVariable("SA_PASSWORD");
 
 string hostIp = Environment.GetEnvironmentVariable("DB_IP");
 
-//builder.Services.AddDbContext<FFDbContext>(options =>
-//    options.UseSqlServer($"Server={hostIp},1433;Database=FfhubDB;User Id=sa;Password={saPassword};TrustServerCertificate=True"));
+builder.Services.AddDbContext<FacefusionDBContext>(options =>
+    options.UseSqlServer($"Server={hostIp},1439;Database=FaceFusionDB;User Id=sa;Password={saPassword};TrustServerCertificate=True"));
 
 var app = builder.Build();
 
