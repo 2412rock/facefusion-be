@@ -26,6 +26,7 @@ namespace FacefusionBE.Controllers
 
         [HttpPost("swap-face")]
         [AuthorizationFilter]
+        [RequestSizeLimit(1024 * 1024 * 1024)]
         public async Task<IActionResult> SwapFace([FromForm] IFormFile sourceImage, [FromForm] IFormFile targetVideo)
         {
             var email = (string)HttpContext.Items["email"];
@@ -99,7 +100,36 @@ namespace FacefusionBE.Controllers
 
         private async Task<double> GetVideoDurationAsync(Stream videoStream)
         {
-            return 10;
+            var tempFilePath = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".mp4");
+
+            try
+            {
+                // Write stream to temporary file
+                using (var fs = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    await videoStream.CopyToAsync(fs);
+                    await fs.FlushAsync();
+                }
+
+                // Analyze video
+                var mediaInfo = await FFmpeg.GetMediaInfo(tempFilePath);
+                return mediaInfo.Duration.TotalSeconds;
+            }
+            finally
+            {
+                // Always try to delete the temp file
+                if (System.IO.File.Exists(tempFilePath))
+                {
+                    try
+                    {
+                        System.IO.File.Delete(tempFilePath);
+                    }
+                    catch
+                    {
+                        // Ignore any delete errors
+                    }
+                }
+            }
         }
     }
 }
